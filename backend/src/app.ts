@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 
 // 1. Health check
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/health', async (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'fluentwave-backend', database: 'persistent-sqlite', timestamp: new Date() });
 });
 
@@ -39,7 +39,7 @@ app.post('/api/v1/auth/signup', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'All fields (firstName, lastName, phone, email, password) are required.' });
     }
 
-    const existing = store.findUserByEmailOrPhone(email) || store.findUserByEmailOrPhone(phone);
+    const existing = await store.findUserByEmailOrPhone(email) || await store.findUserByEmailOrPhone(phone);
     if (existing) {
       return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
     }
@@ -57,7 +57,7 @@ app.post('/api/v1/auth/signup', async (req: Request, res: Response) => {
       createdAt: new Date()
     };
 
-    store.saveUser(newUser);
+    await store.saveUser(newUser);
 
     const newStudent: Student = {
       id: userId,
@@ -76,8 +76,8 @@ app.post('/api/v1/auth/signup', async (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    store.saveStudent(newStudent);
-    store.logEvent(userId, 'USER_REGISTERED', undefined, 'LEAD', { email, phone }, 'STUDENT', userId);
+    await store.saveStudent(newStudent);
+    await store.logEvent(userId, 'USER_REGISTERED', undefined, 'LEAD', { email, phone }, 'STUDENT', userId);
 
     res.status(201).json({
       message: 'Account created successfully.',
@@ -97,7 +97,7 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email/Phone and password are required.' });
     }
 
-    const user = store.findUserByEmailOrPhone(emailOrPhone);
+    const user = await store.findUserByEmailOrPhone(emailOrPhone);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email/phone or password.' });
@@ -108,7 +108,7 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email/phone or password.' });
     }
 
-    const student = store.getStudent(user.id);
+    const student = await store.getStudent(user.id);
 
     res.json({
       message: 'Login successful.',
@@ -121,16 +121,16 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/google
-app.post('/api/v1/auth/google', (req: Request, res: Response) => {
+app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
   try {
     const { email, firstName, lastName, googleId } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email is required from Google account.' });
     }
 
-    let existing = store.findUserByEmailOrPhone(email);
+    let existing = await store.findUserByEmailOrPhone(email);
     if (existing) {
-      const student = store.getStudent(existing.id);
+      const student = await store.getStudent(existing.id);
       return res.json({
         message: 'Google Sign In successful.',
         user: { id: existing.id, email: existing.email, phone: existing.phone, role: existing.role },
@@ -148,7 +148,7 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       createdAt: new Date()
     };
 
-    store.saveUser(newUser);
+    await store.saveUser(newUser);
 
     const newStudent: Student = {
       id: userId,
@@ -167,8 +167,8 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    store.saveStudent(newStudent);
-    store.logEvent(userId, 'USER_REGISTERED_GOOGLE', undefined, 'LEAD', { email }, 'STUDENT', userId);
+    await store.saveStudent(newStudent);
+    await store.logEvent(userId, 'USER_REGISTERED_GOOGLE', undefined, 'LEAD', { email }, 'STUDENT', userId);
 
     res.status(201).json({
       message: 'Account created with Google successfully.',
@@ -185,12 +185,12 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
 // ==========================================
 
 // GET /api/v1/admin/applications
-app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
-  const students = store.getAllStudents();
-  const applications = students.map(student => {
-    const assessment = store.getAssessment(student.id);
-    const documents = store.getDocuments(student.id);
-    const events = store.getEvents(student.id);
+app.get('/api/v1/admin/applications', async (_req: Request, res: Response) => {
+  const students = await store.getAllStudents();
+  const applications = await Promise.all(students.map(async student => {
+    const assessment = await store.getAssessment(student.id);
+    const documents = await store.getDocuments(student.id);
+    const events = await store.getEvents(student.id);
 
     return {
       student,
@@ -201,7 +201,7 @@ app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
       documents,
       lastEvent: events[events.length - 1] || null
     };
-  });
+  }));
 
   const total = applications.length;
   const awaitingReview = applications.filter(a => a.student.status === 'DOCS_REVIEW' || a.student.status === 'HUMAN_REVIEW').length;
@@ -215,14 +215,14 @@ app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
 });
 
 // GET /api/v1/admin/applications/:id
-app.get('/api/v1/admin/applications/:id', (req: Request, res: Response) => {
+app.get('/api/v1/admin/applications/:id', async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const student = store.getStudent(id);
+  const student = await store.getStudent(id);
   if (!student) return res.status(404).json({ error: 'Application not found.' });
 
-  const assessment = store.getAssessment(id);
-  const documents = store.getDocuments(id);
-  const timeline = store.getEvents(id);
+  const assessment = await store.getAssessment(id);
+  const documents = await store.getDocuments(id);
+  const timeline = await store.getEvents(id);
 
   res.json({
     student,
@@ -233,26 +233,26 @@ app.get('/api/v1/admin/applications/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/admin/applications/:id/decision
-app.post('/api/v1/admin/applications/:id/decision', (req: Request, res: Response) => {
+app.post('/api/v1/admin/applications/:id/decision', async (req: Request, res: Response) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const { action, notes, targetPartner } = req.body;
 
-    const student = store.getStudent(id);
+    const student = await store.getStudent(id);
     if (!student) return res.status(404).json({ error: 'Student not found.' });
 
     if (action === 'APPROVE') {
-      store.transitionStudent(id, 'APPROVED', 'REVIEWER', undefined, { notes });
-      return res.json({ message: 'Application approved successfully.', student: store.getStudent(id) });
+      await store.transitionStudent(id, 'APPROVED', 'REVIEWER', undefined, { notes });
+      return res.json({ message: 'Application approved successfully.', student: await store.getStudent(id) });
     } else if (action === 'REQUEST_CORRECTION') {
-      store.transitionStudent(id, 'DOCS_PENDING', 'REVIEWER', undefined, { notes });
-      return res.json({ message: 'Correction requested from student.', student: store.getStudent(id) });
+      await store.transitionStudent(id, 'DOCS_PENDING', 'REVIEWER', undefined, { notes });
+      return res.json({ message: 'Correction requested from student.', student: await store.getStudent(id) });
     } else if (action === 'ROUTE') {
       if (student.status !== 'APPROVED') {
-        store.transitionStudent(id, 'APPROVED', 'REVIEWER');
+        await store.transitionStudent(id, 'APPROVED', 'REVIEWER');
       }
-      store.transitionStudent(id, 'ROUTED', 'REVIEWER', undefined, { partner: targetPartner || 'KIIT University' });
-      return res.json({ message: `Successfully routed to partner: ${targetPartner || 'KIIT University'}`, student: store.getStudent(id) });
+      await store.transitionStudent(id, 'ROUTED', 'REVIEWER', undefined, { partner: targetPartner || 'KIIT University' });
+      return res.json({ message: `Successfully routed to partner: ${targetPartner || 'KIIT University'}`, student: await store.getStudent(id) });
     }
 
     res.status(400).json({ error: 'Invalid action.' });
@@ -266,11 +266,11 @@ app.post('/api/v1/admin/applications/:id/decision', (req: Request, res: Response
 // ==========================================
 
 // POST /api/v1/intake/start
-app.post('/api/v1/intake/start', (req: Request, res: Response) => {
+app.post('/api/v1/intake/start', async (req: Request, res: Response) => {
   try {
     const { studentId, targetCountry, budgetMaxAnnual } = req.body;
 
-    let student = studentId ? store.getStudent(studentId) : null;
+    let student = studentId ? await store.getStudent(studentId) : null;
     if (!student) {
       return res.status(400).json({ error: 'Please sign up or log in first.' });
     }
@@ -279,9 +279,9 @@ app.post('/api/v1/intake/start', (req: Request, res: Response) => {
     student.budgetMaxAnnual = budgetMaxAnnual || student.budgetMaxAnnual;
 
     if (student.status === 'LEAD') {
-      student = store.transitionStudent(student.id, 'INTAKE', 'STUDENT', undefined, { targetCountry });
+      student = await store.transitionStudent(student.id, 'INTAKE', 'STUDENT', undefined, { targetCountry });
     } else {
-      store.saveStudent(student);
+      await store.saveStudent(student);
     }
 
     res.json({ message: 'Intake initiated.', student });
@@ -291,17 +291,17 @@ app.post('/api/v1/intake/start', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/assessments/submit
-app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
+app.post('/api/v1/assessments/submit', async (req: Request, res: Response) => {
   try {
     const { studentId, languageSignals, academicSignals, intentSignals } = req.body;
 
-    const student = store.getStudent(studentId);
+    const student = await store.getStudent(studentId);
     if (!student) {
       return res.status(404).json({ error: `Student with ID ${studentId} not found.` });
     }
 
     if (student.status === 'INTAKE' || student.status === 'LEAD') {
-      store.transitionStudent(studentId, 'ASSESSMENT', 'STUDENT');
+      await store.transitionStudent(studentId, 'ASSESSMENT', 'STUDENT');
     }
 
     // Rubric Scoring Logic
@@ -340,11 +340,11 @@ app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
       evaluatedAt: new Date()
     };
 
-    store.saveAssessment(assessment);
-    store.logEvent(studentId, 'ASSESSMENT_COMPLETED', 'ASSESSMENT', undefined, { readinessScore: totalScore, aiConfidence }, 'AI_AGENT');
+    await store.saveAssessment(assessment);
+    await store.logEvent(studentId, 'ASSESSMENT_COMPLETED', 'ASSESSMENT', undefined, { readinessScore: totalScore, aiConfidence }, 'AI_AGENT');
 
-    store.transitionStudent(studentId, 'DOCS_PENDING', 'SYSTEM', undefined, { readinessScore: totalScore });
-    const checklist = store.initializeChecklist(studentId);
+    await store.transitionStudent(studentId, 'DOCS_PENDING', 'SYSTEM', undefined, { readinessScore: totalScore });
+    const checklist = await store.initializeChecklist(studentId);
 
     res.json({
       message: 'Assessment evaluated successfully.',
@@ -357,9 +357,9 @@ app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
 });
 
 // GET /api/v1/students/:id/checklist
-app.get('/api/v1/students/:id/checklist', (req: Request, res: Response) => {
+app.get('/api/v1/students/:id/checklist', async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const docs = store.getDocuments(id);
+  const docs = await store.getDocuments(id);
   if (!docs || docs.length === 0) return res.status(404).json({ error: `Checklist not found for student ${id}` });
   res.json({ studentId: id, checklist: docs });
 });
@@ -374,7 +374,7 @@ app.get('/api/v1/documents/:docId/upload-url', async (req: Request, res: Respons
       return res.status(400).json({ error: 'Missing required query parameters' });
     }
 
-    const docs = store.getDocuments(studentId as string);
+    const docs = await store.getDocuments(studentId as string);
     const doc = docs.find(d => d.id === docId);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
@@ -396,39 +396,39 @@ app.get('/api/v1/documents/:docId/upload-url', async (req: Request, res: Respons
 });
 
 // POST /api/v1/documents/:docId/confirm-upload
-app.post('/api/v1/documents/:docId/confirm-upload', (req: Request, res: Response) => {
+app.post('/api/v1/documents/:docId/confirm-upload', async (req: Request, res: Response) => {
   const docId = Array.isArray(req.params.docId) ? req.params.docId[0] : req.params.docId;
   const { studentId, fileKey } = req.body;
 
-  const docs = store.getDocuments(studentId);
+  const docs = await store.getDocuments(studentId);
   if (!docs || docs.length === 0) return res.status(404).json({ error: 'Student documents not found.' });
 
   const doc = docs.find(d => d.id === docId);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
   const fileUrl = `https://${S3_BUCKET_NAME}.s3.amazonaws.com/${fileKey}`;
-  store.updateDocument(docId, 'UPLOADED', fileUrl);
+  await store.updateDocument(docId, 'UPLOADED', fileUrl);
 
-  store.logEvent(studentId, 'DOCUMENT_UPLOADED', 'REQUESTED', 'UPLOADED', { docType: doc.docType, docId }, 'STUDENT');
+  await store.logEvent(studentId, 'DOCUMENT_UPLOADED', 'REQUESTED', 'UPLOADED', { docType: doc.docType, docId }, 'STUDENT');
 
-  const refreshedDocs = store.getDocuments(studentId);
+  const refreshedDocs = await store.getDocuments(studentId);
   const allUploaded = refreshedDocs.every(d => d.state === 'UPLOADED' || d.state === 'VERIFIED');
   if (allUploaded) {
-    store.transitionStudent(studentId, 'DOCS_REVIEW', 'SYSTEM');
+    await store.transitionStudent(studentId, 'DOCS_REVIEW', 'SYSTEM');
   }
 
   res.json({ message: 'Document confirmed uploaded.', document: { ...doc, state: 'UPLOADED', fileUrl } });
 });
 
 // GET /api/v1/students/:id/dashboard
-app.get('/api/v1/students/:id/dashboard', (req: Request, res: Response) => {
+app.get('/api/v1/students/:id/dashboard', async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const student = store.getStudent(id);
+  const student = await store.getStudent(id);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
-  const events = store.getEvents(id);
-  const checklist = store.getDocuments(id);
-  const assessment = store.getAssessment(id);
+  const events = await store.getEvents(id);
+  const checklist = await store.getDocuments(id);
+  const assessment = await store.getAssessment(id);
 
   let nextAction = 'Complete your intake';
   if (student.status === 'INTAKE') nextAction = 'Take the Readiness Assessment';

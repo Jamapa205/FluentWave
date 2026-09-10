@@ -1,7 +1,4 @@
-// FluentWave Persistent SQLite Database Repository
-// Stores all users, students, assessments, documents, and audit logs to fluentwave.sqlite
-
-import { sqlite } from './sqlite_db';
+import { pool } from './db';
 import { 
   Student, 
   StudentStatus, 
@@ -20,22 +17,27 @@ export class StateMachineError extends Error {
   }
 }
 
-export class PersistentDatabaseStore {
+export class PostgresDatabaseStore {
 
   // USERS
-  public saveUser(user: UserAccount): void {
-    const stmt = sqlite.prepare(`
-      INSERT OR REPLACE INTO users (id, email, phone, password_hash, role, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(user.id, user.email, user.phone, user.passwordHash, user.role, user.createdAt.toISOString());
+  public async saveUser(user: UserAccount): Promise<void> {
+    await pool.query(`
+      INSERT INTO users (id, email, phone, password_hash, role, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email, 
+        phone = EXCLUDED.phone, 
+        password_hash = EXCLUDED.password_hash, 
+        role = EXCLUDED.role;
+    `, [user.id, user.email, user.phone, user.passwordHash, user.role, user.createdAt]);
   }
 
-  public findUserByEmailOrPhone(identifier: string): UserAccount | null {
-    const row = sqlite.prepare(`
-      SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR phone = ?
-    `).get(identifier, identifier) as any;
+  public async findUserByEmailOrPhone(identifier: string): Promise<UserAccount | null> {
+    const res = await pool.query(`
+      SELECT * FROM users WHERE LOWER(email) = LOWER($1) OR phone = $2
+    `, [identifier, identifier]);
 
+    const row = res.rows[0];
     if (!row) return null;
     return {
       id: row.id,
@@ -48,21 +50,34 @@ export class PersistentDatabaseStore {
   }
 
   // STUDENTS
-  public saveStudent(s: Student): void {
-    const stmt = sqlite.prepare(`
-      INSERT OR REPLACE INTO students 
+  public async saveStudent(s: Student): Promise<void> {
+    await pool.query(`
+      INSERT INTO students 
       (id, first_name, last_name, phone, email, nationality, current_country, target_country, target_program_level, budget_currency, budget_max_annual, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (id) DO UPDATE SET
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name,
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        nationality = EXCLUDED.nationality,
+        current_country = EXCLUDED.current_country,
+        target_country = EXCLUDED.target_country,
+        target_program_level = EXCLUDED.target_program_level,
+        budget_currency = EXCLUDED.budget_currency,
+        budget_max_annual = EXCLUDED.budget_max_annual,
+        status = EXCLUDED.status,
+        updated_at = EXCLUDED.updated_at;
+    `, [
       s.id, s.firstName, s.lastName, s.phone, s.email || null, s.nationality, s.currentCountry,
       s.targetCountry, s.targetProgramLevel, s.budgetCurrency, s.budgetMaxAnnual, s.status,
-      s.createdAt.toISOString(), s.updatedAt.toISOString()
-    );
+      s.createdAt, s.updatedAt
+    ]);
   }
 
-  public getStudent(id: string): Student | null {
-    const row = sqlite.prepare(`SELECT * FROM students WHERE id = ?`).get(id) as any;
+  public async getStudent(id: string): Promise<Student | null> {
+    const res = await pool.query(`SELECT * FROM students WHERE id = $1`, [id]);
+    const row = res.rows[0];
     if (!row) return null;
     return {
       id: row.id,
@@ -82,9 +97,9 @@ export class PersistentDatabaseStore {
     };
   }
 
-  public getAllStudents(): Student[] {
-    const rows = sqlite.prepare(`SELECT * FROM students ORDER BY created_at DESC`).all() as any[];
-    return rows.map(row => ({
+  public async getAllStudents(): Promise<Student[]> {
+    const res = await pool.query(`SELECT * FROM students ORDER BY created_at DESC`);
+    return res.rows.map(row => ({
       id: row.id,
       firstName: row.first_name,
       lastName: row.last_name,
@@ -103,38 +118,43 @@ export class PersistentDatabaseStore {
   }
 
   // ASSESSMENTS
-  public saveAssessment(a: Assessment): void {
-    const stmt = sqlite.prepare(`
-      INSERT OR REPLACE INTO assessments
+  public async saveAssessment(a: Assessment): Promise<void> {
+    await pool.query(`
+      INSERT INTO assessments
       (id, student_id, language_signals, academic_signals, intent_signals, readiness_score, rubric_breakdown, ai_confidence, requires_human_gate, evaluated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
-      a.id, a.studentId, JSON.stringify(a.languageSignals), JSON.stringify(a.academicSignals),
-      JSON.stringify(a.intentSignals), a.readinessScore, JSON.stringify(a.rubricBreakdown),
-      a.aiConfidence, a.requiresHumanGate ? 1 : 0, a.evaluatedAt.toISOString()
-    );
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (id) DO UPDATE SET
+        readiness_score = EXCLUDED.readiness_score,
+        rubric_breakdown = EXCLUDED.rubric_breakdown,
+        ai_confidence = EXCLUDED.ai_confidence,
+        evaluated_at = EXCLUDED.evaluated_at;
+    `, [
+      a.id, a.studentId, a.languageSignals, a.academicSignals,
+      a.intentSignals, a.readinessScore, a.rubricBreakdown,
+      a.aiConfidence, a.requiresHumanGate, a.evaluatedAt
+    ]);
   }
 
-  public getAssessment(studentId: string): Assessment | null {
-    const row = sqlite.prepare(`SELECT * FROM assessments WHERE student_id = ?`).get(studentId) as any;
+  public async getAssessment(studentId: string): Promise<Assessment | null> {
+    const res = await pool.query(`SELECT * FROM assessments WHERE student_id = $1`, [studentId]);
+    const row = res.rows[0];
     if (!row) return null;
     return {
       id: row.id,
       studentId: row.student_id,
-      languageSignals: JSON.parse(row.language_signals || '{}'),
-      academicSignals: JSON.parse(row.academic_signals || '{}'),
-      intentSignals: JSON.parse(row.intent_signals || '{}'),
-      readinessScore: row.readiness_score,
-      rubricBreakdown: JSON.parse(row.rubric_breakdown || '{}'),
-      aiConfidence: row.ai_confidence,
-      requiresHumanGate: row.requires_human_gate === 1,
+      languageSignals: row.language_signals,
+      academicSignals: row.academic_signals,
+      intentSignals: row.intent_signals,
+      readinessScore: Number(row.readiness_score),
+      rubricBreakdown: row.rubric_breakdown,
+      aiConfidence: Number(row.ai_confidence),
+      requiresHumanGate: row.requires_human_gate,
       evaluatedAt: new Date(row.evaluated_at)
     };
   }
 
   // DOCUMENTS
-  public initializeChecklist(studentId: string): DocumentItem[] {
+  public async initializeChecklist(studentId: string): Promise<DocumentItem[]> {
     const defaultDocs: DocumentItem[] = [
       { id: uuidv4(), studentId, docType: 'PASSPORT', state: 'REQUESTED' },
       { id: uuidv4(), studentId, docType: 'DIPLOMA_CERTIFICATE', state: 'REQUESTED' },
@@ -142,18 +162,20 @@ export class PersistentDatabaseStore {
       { id: uuidv4(), studentId, docType: 'PHOTO', state: 'REQUESTED' }
     ];
 
-    const stmt = sqlite.prepare(`
-      INSERT OR REPLACE INTO documents (id, student_id, doc_type, state, file_url)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    defaultDocs.forEach(d => stmt.run(d.id, d.studentId, d.docType, d.state, d.fileUrl || null));
+    for (const d of defaultDocs) {
+      await pool.query(`
+        INSERT INTO documents (id, student_id, doc_type, state, file_url)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO NOTHING;
+      `, [d.id, d.studentId, d.docType, d.state, d.fileUrl || null]);
+    }
 
     return defaultDocs;
   }
 
-  public getDocuments(studentId: string): DocumentItem[] {
-    const rows = sqlite.prepare(`SELECT * FROM documents WHERE student_id = ?`).all(studentId) as any[];
-    return rows.map(r => ({
+  public async getDocuments(studentId: string): Promise<DocumentItem[]> {
+    const res = await pool.query(`SELECT * FROM documents WHERE student_id = $1`, [studentId]);
+    return res.rows.map(r => ({
       id: r.id,
       studentId: r.student_id,
       docType: r.doc_type,
@@ -163,15 +185,14 @@ export class PersistentDatabaseStore {
     }));
   }
 
-  public updateDocument(docId: string, state: string, fileUrl: string): void {
-    const stmt = sqlite.prepare(`
-      UPDATE documents SET state = ?, file_url = ?, uploaded_at = CURRENT_TIMESTAMP WHERE id = ?
-    `);
-    stmt.run(state, fileUrl, docId);
+  public async updateDocument(docId: string, state: string, fileUrl: string): Promise<void> {
+    await pool.query(`
+      UPDATE documents SET state = $1, file_url = $2, uploaded_at = CURRENT_TIMESTAMP WHERE id = $3
+    `, [state, fileUrl, docId]);
   }
 
   // AUDIT CASE EVENTS (Append-Only)
-  public logEvent(
+  public async logEvent(
     caseId: string, 
     eventType: string, 
     fromState: string | undefined, 
@@ -179,50 +200,51 @@ export class PersistentDatabaseStore {
     payload: Record<string, any>,
     actorType: 'STUDENT' | 'REVIEWER' | 'AI_AGENT' | 'SYSTEM' = 'SYSTEM',
     actorId?: string
-  ): CaseEvent {
-    const stmt = sqlite.prepare(`
+  ): Promise<CaseEvent> {
+    const res = await pool.query(`
       INSERT INTO case_events (case_id, actor_id, actor_type, event_type, from_state, to_state, payload)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    const info = stmt.run(caseId, actorId || null, actorType, eventType, fromState || null, toState || null, JSON.stringify(payload));
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [caseId, actorId || null, actorType, eventType, fromState || null, toState || null, payload]);
     
+    const row = res.rows[0];
     return {
-      id: Number(info.lastInsertRowid),
-      caseId,
-      actorId,
-      actorType,
-      eventType,
-      fromState,
-      toState,
-      payload,
-      createdAt: new Date()
+      id: Number(row.id),
+      caseId: row.case_id,
+      actorId: row.actor_id,
+      actorType: row.actor_type,
+      eventType: row.event_type,
+      fromState: row.from_state,
+      toState: row.to_state,
+      payload: row.payload,
+      createdAt: new Date(row.created_at)
     };
   }
 
-  public getEvents(caseId: string): CaseEvent[] {
-    const rows = sqlite.prepare(`SELECT * FROM case_events WHERE case_id = ? ORDER BY id ASC`).all(caseId) as any[];
-    return rows.map(r => ({
-      id: r.id,
+  public async getEvents(caseId: string): Promise<CaseEvent[]> {
+    const res = await pool.query(`SELECT * FROM case_events WHERE case_id = $1 ORDER BY id ASC`, [caseId]);
+    return res.rows.map(r => ({
+      id: Number(r.id),
       caseId: r.case_id,
       actorId: r.actor_id,
       actorType: r.actor_type,
       eventType: r.event_type,
       fromState: r.from_state,
       toState: r.to_state,
-      payload: JSON.parse(r.payload || '{}'),
+      payload: r.payload,
       createdAt: new Date(r.created_at)
     }));
   }
 
   // STATE MACHINE TRANSITION WITH AUDIT
-  public transitionStudent(
+  public async transitionStudent(
     studentId: string, 
     nextState: StudentStatus, 
     actorType: 'STUDENT' | 'REVIEWER' | 'AI_AGENT' | 'SYSTEM' = 'SYSTEM',
     actorId?: string,
     evidencePayload: Record<string, any> = {}
-  ): Student {
-    const student = this.getStudent(studentId);
+  ): Promise<Student> {
+    const student = await this.getStudent(studentId);
     if (!student) {
       throw new StateMachineError(`Student with ID ${studentId} not found.`);
     }
@@ -238,9 +260,9 @@ export class PersistentDatabaseStore {
 
     student.status = nextState;
     student.updatedAt = new Date();
-    this.saveStudent(student);
+    await this.saveStudent(student);
 
-    this.logEvent(
+    await this.logEvent(
       studentId, 
       `STUDENT_STATUS_CHANGED`, 
       currentState, 
@@ -254,4 +276,4 @@ export class PersistentDatabaseStore {
   }
 }
 
-export const dbStore = new PersistentDatabaseStore();
+export const dbStore = new PostgresDatabaseStore();
