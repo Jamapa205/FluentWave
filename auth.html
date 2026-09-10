@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FluentWave | Student Sign In & Sign Up</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --bg-light: #f8fafc;
+      --border-color: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .auth-container {
+      max-width: 460px;
+      width: 100%;
+      margin: 60px auto;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 36px 32px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+
+    .auth-tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 28px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      background: none;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: center;
+      position: relative;
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--primary);
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-dark);
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 13px;
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      border: none;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.2s;
+    }
+
+    .btn-submit:hover { background: var(--primary-hover); }
+
+    .help-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
+
+    .error-msg {
+      background: #fee2e2;
+      color: #b91c1c;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="fluentwave_homepage.html" class="logo">
+      <i class="fa-solid fa-graduation-cap"></i> FluentWave
+    </a>
+    <div>
+      <a href="admin_portal.html" style="font-size: 13px; color: var(--text-muted); text-decoration: none;">
+        <i class="fa-solid fa-lock"></i> Admissions Staff Portal
+      </a>
+    </div>
+  </header>
+
+  <div class="auth-container">
+    <div class="auth-tabs">
+      <button class="tab-btn active" id="tab-signup" onclick="switchTab('signup')">Create Account</button>
+      <button class="tab-btn" id="tab-login" onclick="switchTab('login')">Sign In</button>
+    </div>
+
+    <div class="error-msg" id="error-box"></div>
+
+    <!-- SIGN UP FORM -->
+    <form id="form-signup">
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name</label>
+          <input type="text" id="su-firstname" required placeholder="Jean-Luc">
+        </div>
+        <div class="form-group">
+          <label>Last Name</label>
+          <input type="text" id="su-lastname" required placeholder="Kambale">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>WhatsApp Phone Number</label>
+        <input type="tel" id="su-phone" required placeholder="+243 99 123 4567">
+        <div class="help-text">Used for admissions status updates & notifications.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="su-email" required placeholder="student@example.com">
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="su-password" required minlength="6" placeholder="Choose a secure password">
+      </div>
+
+      <button type="submit" class="btn-submit">
+        Create Account & Begin Assessment <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </form>
+
+    <!-- LOGIN FORM -->
+    <form id="form-login" class="hidden">
+      <div class="form-group">
+        <label>Email or WhatsApp Phone</label>
+        <input type="text" id="li-identifier" required placeholder="student@example.com or +243...">
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="li-password" required placeholder="Enter your password">
+      </div>
+
+      <button type="submit" class="btn-submit">
+        Sign In to Portal <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:4000/api/v1/auth';
+
+    function switchTab(type) {
+      document.getElementById('error-box').style.display = 'none';
+      if (type === 'signup') {
+        document.getElementById('tab-signup').classList.add('active');
+        document.getElementById('tab-login').classList.remove('active');
+        document.getElementById('form-signup').classList.remove('hidden');
+        document.getElementById('form-login').classList.add('hidden');
+      } else {
+        document.getElementById('tab-login').classList.add('active');
+        document.getElementById('tab-signup').classList.remove('active');
+        document.getElementById('form-login').classList.remove('hidden');
+        document.getElementById('form-signup').classList.add('hidden');
+      }
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      box.innerText = msg;
+      box.style.display = 'block';
+    }
+
+    // Handle Sign Up
+    document.getElementById('form-signup').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        firstName: document.getElementById('su-firstname').value,
+        lastName: document.getElementById('su-lastname').value,
+        phone: document.getElementById('su-phone').value,
+        email: document.getElementById('su-email').value,
+        password: document.getElementById('su-password').value
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('fluentwave_user', JSON.stringify(data.user));
+          localStorage.setItem('fluentwave_student', JSON.stringify(data.student));
+          window.location.href = 'student_portal.html';
+        } else {
+          showError(data.error || 'Failed to create account.');
+        }
+      } catch (err) {
+        showError('Could not connect to backend server at http://localhost:4000.');
+      }
+    });
+
+    // Handle Login
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        emailOrPhone: document.getElementById('li-identifier').value,
+        password: document.getElementById('li-password').value
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('fluentwave_user', JSON.stringify(data.user));
+          if (data.student) {
+            localStorage.setItem('fluentwave_student', JSON.stringify(data.student));
+          }
+          window.location.href = 'student_portal.html';
+        } else {
+          showError(data.error || 'Invalid credentials.');
+        }
+      } catch (err) {
+        showError('Could not connect to backend server.');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -7,7 +7,8 @@ import {
   ALLOWED_STUDENT_TRANSITIONS, 
   Assessment, 
   DocumentItem, 
-  CaseEvent 
+  CaseEvent,
+  UserAccount
 } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,6 +20,7 @@ export class StateMachineError extends Error {
 }
 
 export class InMemoryStore {
+  public users: Map<string, UserAccount> = new Map();
   public students: Map<string, Student> = new Map();
   public assessments: Map<string, Assessment> = new Map();
   public documents: Map<string, DocumentItem[]> = new Map();

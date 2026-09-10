@@ -53,7 +53,7 @@ export const ALLOWED_STUDENT_TRANSITIONS: Record<StudentStatus, StudentStatus[]>
   INTAKE: ['ASSESSMENT', 'WITHDRAWN'],
   ASSESSMENT: ['DOCS_PENDING', 'ESCALATED', 'WITHDRAWN'],
   DOCS_PENDING: ['DOCS_REVIEW', 'WITHDRAWN'],
-  DOCS_REVIEW: ['HUMAN_REVIEW', 'NEEDS_CORRECTION' as any, 'ESCALATED'],
+  DOCS_REVIEW: ['HUMAN_REVIEW', 'APPROVED', 'DOCS_PENDING', 'ESCALATED'],
   HUMAN_REVIEW: ['APPROVED', 'DOCS_PENDING', 'ESCALATED', 'WITHDRAWN'],
   APPROVED: ['ROUTED', 'WITHDRAWN'],
   ROUTED: ['APPLICATION_ACTIVE', 'WITHDRAWN', 'ESCALATED'],
@@ -62,6 +62,15 @@ export const ALLOWED_STUDENT_TRANSITIONS: Record<StudentStatus, StudentStatus[]>
   WITHDRAWN: [],
   ESCALATED: ['HUMAN_REVIEW', 'WITHDRAWN']
 };
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  phone: string;
+  passwordHash: string;
+  role: UserRole;
+  createdAt: Date;
+}
 
 export interface Student {
   id: string;

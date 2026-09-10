@@ -230,10 +230,13 @@
     <a href="fluentwave_homepage.html" class="logo">
       <i class="fa-solid fa-graduation-cap"></i> FluentWave Student Portal
     </a>
-    <div style="font-size: 13px; color: var(--text-muted);">
-      Corridor: <strong>DRC ➔ India / Global</strong>
+
+    <div style="display: flex; gap: 16px; align-items: center;">
+      <span id="user-display" style="font-size: 13px; color: var(--text-muted);"></span>
+      <button onclick="logout()" style="background: none; border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">Sign Out</button>
     </div>
   </header>
+
 
   <div class="container">
     <!-- Stepper -->
@@ -380,9 +383,40 @@
     </div>
   </div>
 
+  
   <script>
     const API_BASE = 'http://localhost:4000/api/v1';
     let currentStudentId = null;
+
+    // Check if user is logged in
+    const storedUser = localStorage.getItem('fluentwave_user');
+    const storedStudent = localStorage.getItem('fluentwave_student');
+    
+    if (!storedUser) {
+      window.location.href = 'auth.html';
+    } else {
+      const u = JSON.parse(storedUser);
+      const s = storedStudent ? JSON.parse(storedStudent) : null;
+      if (s) {
+        currentStudentId = s.id;
+        document.getElementById('first-name').value = s.firstName || '';
+        document.getElementById('last-name').value = s.lastName || '';
+        document.getElementById('phone').value = s.phone || '';
+        document.getElementById('email').value = s.email || '';
+      }
+    }
+
+
+
+    function logout() {
+      localStorage.removeItem('fluentwave_user');
+      localStorage.removeItem('fluentwave_student');
+      window.location.href = 'auth.html';
+    }
+    if (storedUser) {
+      const u = JSON.parse(storedUser);
+      document.getElementById('user-display').innerText = u.email;
+    }
 
     // 1. Submit Intake Form
     document.getElementById('intake-form').addEventListener('submit', async (e) => {
