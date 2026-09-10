@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin_portal.html
+Disallow: /api/
+
+Sitemap: https://fluentwave.org/sitemap.xml
