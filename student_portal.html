@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FluentWave | Student Portal & Assessment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --bg-light: #f8fafc;
+      --border-color: #e2e8f0;
+      --success: #16a34a;
+      --warning: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+      line-height: 1.6;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    /* Stepper */
+    .stepper {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      position: relative;
+    }
+    .stepper::before {
+      content: '';
+      position: absolute;
+      top: 18px;
+      left: 30px;
+      right: 30px;
+      height: 2px;
+      background: var(--border-color);
+      z-index: 1;
+    }
+    .step-node {
+      position: relative;
+      z-index: 2;
+      background: var(--bg-light);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .step-node.active .step-circle {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+    .step-node.completed .step-circle {
+      border-color: var(--success);
+      background: var(--success);
+      color: #fff;
+    }
+    .step-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Cards */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 32px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      margin-bottom: 24px;
+    }
+
+    .card h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .card p.sub {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    /* Form controls */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-dark);
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .btn {
+      display: inline-block;
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      border: none;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: var(--primary-hover); }
+
+    /* Checklist */
+    .doc-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      background: var(--bg-light);
+    }
+    .doc-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .doc-icon {
+      font-size: 24px;
+      color: var(--primary);
+    }
+    .badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .badge-requested { background: #fee2e2; color: #b91c1c; }
+    .badge-uploaded { background: #dcfce7; color: #15803d; }
+
+    /* Score display */
+    .score-circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), #38b6ff);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .score-num { font-size: 32px; font-weight: 800; line-height: 1; }
+    .score-sub { font-size: 11px; opacity: 0.9; }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="fluentwave_homepage.html" class="logo">
+      <i class="fa-solid fa-graduation-cap"></i> FluentWave Student Portal
+    </a>
+    <div style="font-size: 13px; color: var(--text-muted);">
+      Corridor: <strong>DRC ➔ India / Global</strong>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step-node active" id="node-step1">
+        <div class="step-circle">1</div>
+        <div class="step-label">Intake</div>
+      </div>
+      <div class="step-node" id="node-step2">
+        <div class="step-circle">2</div>
+        <div class="step-label">Assessment</div>
+      </div>
+      <div class="step-node" id="node-step3">
+        <div class="step-circle">3</div>
+        <div class="step-label">Documents</div>
+      </div>
+      <div class="step-node" id="node-step4">
+        <div class="step-circle">4</div>
+        <div class="step-label">Dashboard</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Initial Intake Form -->
+    <div class="card" id="step-intake">
+      <h2>1. Student Registration & Profile</h2>
+      <p class="sub">Tell us about your background and study ambitions so we can prepare your case.</p>
+      
+      <form id="intake-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" id="first-name" required placeholder="e.g. Jean-Luc">
+          </div>
+          <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" id="last-name" required placeholder="e.g. Kambale">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>WhatsApp Phone (With Country Code)</label>
+            <input type="tel" id="phone" required placeholder="+243 99 123 4567">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="email" required placeholder="name@example.com">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Target Country</label>
+            <select id="target-country">
+              <option value="India">India (Affordable Excellence)</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Canada">Canada</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Estimated Annual Budget (USD)</label>
+            <input type="number" id="budget" value="4500">
+          </div>
+        </div>
+
+        <button type="submit" class="btn" id="btn-intake">Start Assessment <i class="fa-solid fa-arrow-right"></i></button>
+      </form>
+    </div>
+
+    <!-- Step 2: Readiness Assessment Questionnaire -->
+    <div class="card hidden" id="step-assessment">
+      <h2>2. Bilingual Readiness Assessment</h2>
+      <p class="sub">Our AI analyzes your academic signals and language level to match partner universities.</p>
+
+      <form id="assessment-form">
+        <div class="form-group">
+          <label>High School / State Exam Score (Examen d'État %)</label>
+          <input type="number" id="academic-score" required min="40" max="100" value="68" placeholder="e.g. 65%">
+        </div>
+
+        <div class="form-group">
+          <label>English Language Comfort Level</label>
+          <select id="language-level">
+            <option value="BEGINNER">Beginner (French dominant, basic English words)</option>
+            <option value="INTERMEDIATE" selected>Intermediate (Can converse and write simple essays)</option>
+            <option value="FLUENT">Advanced / Fluent (Comfortable in academic English)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Intended Faculty / Field of Study</label>
+          <select id="intended-faculty">
+            <option value="Computer Science & IT">Computer Science / Software Engineering</option>
+            <option value="Business Administration">Business & Management (BBA/MBA)</option>
+            <option value="Medicine & Nursing">Medicine & Healthcare</option>
+            <option value="Civil/Mechanical Engineering">Engineering</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Do you have a financial sponsor (family, self, or grant)?</label>
+          <select id="has-sponsor">
+            <option value="true">Yes, family or self-funded</option>
+            <option value="false">No, looking for full scholarships</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn" id="btn-assess">Calculate My Readiness Score <i class="fa-solid fa-bolt"></i></button>
+      </form>
+    </div>
+
+    <!-- Step 3: Document Upload Checklist -->
+    <div class="card hidden" id="step-documents">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div class="score-circle">
+          <div class="score-num" id="display-score">--</div>
+          <div class="score-sub">SCORE</div>
+        </div>
+        <h2 style="font-size: 20px;">Ready for Document Verification!</h2>
+        <p class="sub">Upload clear photos or scans from your phone. Our OCR pipeline will extract and verify your identity.</p>
+      </div>
+
+      <div id="checklist-container">
+        <!-- Injected dynamically -->
+      </div>
+
+      <button type="button" class="btn" id="btn-go-dashboard" style="margin-top: 16px;">Go to My Student Dashboard <i class="fa-solid fa-check"></i></button>
+    </div>
+
+    <!-- Step 4: Student Dashboard -->
+    <div class="card hidden" id="step-dashboard">
+      <h2>Student Dashboard</h2>
+      <p class="sub" id="dash-student-name">Loading profile...</p>
+
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 18px; border-radius: 8px; margin-bottom: 24px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase;">Current Next Action</div>
+        <div style="font-size: 18px; font-weight: 700; margin-top: 4px;" id="dash-next-action">--</div>
+      </div>
+
+      <h3 style="font-size: 16px; margin-bottom: 12px;">Immutable Audit Timeline (Event Stream)</h3>
+      <div id="timeline-container" style="font-size: 13px; color: var(--text-muted);">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:4000/api/v1';
+    let currentStudentId = null;
+
+    // 1. Submit Intake Form
+    document.getElementById('intake-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        firstName: document.getElementById('first-name').value,
+        lastName: document.getElementById('last-name').value,
+        phone: document.getElementById('phone').value,
+        email: document.getElementById('email').value,
+        targetCountry: document.getElementById('target-country').value,
+        budgetMaxAnnual: Number(document.getElementById('budget').value)
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/intake/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentStudentId = data.student.id;
+          // Switch to Step 2
+          document.getElementById('step-intake').classList.add('hidden');
+          document.getElementById('step-assessment').classList.remove('hidden');
+          document.getElementById('node-step1').classList.add('completed');
+          document.getElementById('node-step2').classList.add('active');
+        } else {
+          alert(data.error || 'Failed to start intake.');
+        }
+      } catch (err) {
+        alert('Could not connect to backend at http://localhost:4000. Is the backend running?');
+      }
+    });
+
+    // 2. Submit Assessment Form
+    document.getElementById('assessment-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        studentId: currentStudentId,
+        academicSignals: {
+          examPercentage: Number(document.getElementById('academic-score').value)
+        },
+        languageSignals: {
+          selfDeclaredLevel: document.getElementById('language-level').value
+        },
+        intentSignals: {
+          intendedFaculty: document.getElementById('intended-faculty').value,
+          hasFinancialSponsor: document.getElementById('has-sponsor').value === 'true',
+          targetIntakeMonth: 'September'
+        }
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/assessments/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('display-score').innerText = Math.round(data.assessment.readinessScore) + '%';
+          renderChecklist(data.checklist);
+
+          // Switch to Step 3
+          document.getElementById('step-assessment').classList.add('hidden');
+          document.getElementById('step-documents').classList.remove('hidden');
+          document.getElementById('node-step2').classList.add('completed');
+          document.getElementById('node-step3').classList.add('active');
+        } else {
+          alert(data.error || 'Assessment failed.');
+        }
+      } catch (err) {
+        alert('Error connecting to backend.');
+      }
+    });
+
+    // 3. Render Document Checklist & File Upload Simulator
+    function renderChecklist(checklist) {
+      const container = document.getElementById('checklist-container');
+      container.innerHTML = '';
+
+      checklist.forEach(doc => {
+        const div = document.createElement('div');
+        div.className = 'doc-item';
+        const isUploaded = doc.state === 'UPLOADED' || doc.state === 'VERIFIED';
+
+        div.innerHTML = `
+          <div class="doc-info">
+            <i class="fa-regular fa-file-pdf doc-icon"></i>
+            <div>
+              <div style="font-weight: 600;">${doc.docType.replace('_', ' ')}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">Required for university admission</div>
+            </div>
+          </div>
+          <div>
+            ${isUploaded 
+              ? `<span class="badge badge-uploaded"><i class="fa-solid fa-check"></i> Uploaded</span>`
+              : `<button type="button" class="btn" style="width: auto; padding: 8px 16px; font-size: 13px;" onclick="uploadMockDoc('${doc.id}')">
+                   <i class="fa-solid fa-upload"></i> Upload Scan
+                 </button>`
+            }
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // 4. Mock File Upload
+    async function uploadMockDoc(docId) {
+      try {
+        const res = await fetch(`${API_BASE}/documents/${docId}/mock-upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: currentStudentId,
+            fileUrl: `https://storage.fluentwave.internal/drc_docs/${docId}.pdf`
+          })
+        });
+        if (res.ok) {
+          // Refresh checklist
+          const checkRes = await fetch(`${API_BASE}/students/${currentStudentId}/checklist`);
+          const checkData = await checkRes.json();
+          renderChecklist(checkData.checklist);
+        }
+      } catch (err) {
+        alert('Failed to upload.');
+      }
+    }
+
+    // 5. Open Dashboard
+    document.getElementById('btn-go-dashboard').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`${API_BASE}/students/${currentStudentId}/dashboard`);
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('step-documents').classList.add('hidden');
+          document.getElementById('step-dashboard').classList.remove('hidden');
+          document.getElementById('node-step3').classList.add('completed');
+          document.getElementById('node-step4').classList.add('active');
+
+          document.getElementById('dash-student-name').innerText = `Student: ${data.student.firstName} ${data.student.lastName} (${data.student.phone}) • Status: ${data.student.status}`;
+          document.getElementById('dash-next-action').innerText = data.nextAction;
+
+          const timelineDiv = document.getElementById('timeline-container');
+          timelineDiv.innerHTML = '';
+          data.timeline.forEach(t => {
+            const row = document.createElement('div');
+            row.style.padding = '8px 0';
+            row.style.borderBottom = '1px solid var(--border-color)';
+            row.innerHTML = `<strong>${new Date(t.createdAt).toLocaleTimeString()}</strong>: <code>${t.eventType}</code> [${t.fromState || 'START'} ➔ ${t.toState || 'SAME'}] by <em>${t.actorType}</em>`;
+            timelineDiv.appendChild(row);
+          });
+        }
+      } catch (err) {
+        alert('Failed to load dashboard.');
+      }
+    });
+  </script>
+</body>
+</html>
