@@ -2,7 +2,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { store } from './store';
+import { dbStore as store } from './db_store';
 import { Student, Assessment, UserAccount } from './types';
 
 const app = express();
@@ -11,7 +11,7 @@ app.use(express.json());
 
 // 1. Health check
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'fluentwave-backend', timestamp: new Date() });
+  res.json({ status: 'ok', service: 'fluentwave-backend', database: 'persistent-sqlite', timestamp: new Date() });
 });
 
 // ==========================================
@@ -27,11 +27,9 @@ app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'All fields (firstName, lastName, phone, email, password) are required.' });
     }
 
-    // Check if user already exists
-    for (const u of store.users.values()) {
-      if (u.email.toLowerCase() === email.toLowerCase() || u.phone === phone) {
-        return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
-      }
+    const existing = store.findUserByEmailOrPhone(email) || store.findUserByEmailOrPhone(phone);
+    if (existing) {
+      return res.status(400).json({ error: 'An account with this email or phone number already exists.' });
     }
 
     const userId = uuidv4();
@@ -39,22 +37,21 @@ app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
       id: userId,
       email: email.toLowerCase(),
       phone,
-      passwordHash: Buffer.from(password).toString('base64'), // Simple demo encoding
+      passwordHash: Buffer.from(password).toString('base64'),
       role: 'STUDENT',
       createdAt: new Date()
     };
 
-    store.users.set(userId, newUser);
+    store.saveUser(newUser);
 
-    // Also auto-create their student record in LEAD state
     const newStudent: Student = {
       id: userId,
       firstName,
       lastName,
       phone,
       email: email.toLowerCase(),
-      nationality: 'DRC',
-      currentCountry: 'DRC',
+      nationality: 'Global',
+      currentCountry: 'Global',
       targetCountry: 'India',
       targetProgramLevel: 'UNDERGRADUATE',
       budgetCurrency: 'USD',
@@ -64,7 +61,7 @@ app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    store.students.set(userId, newStudent);
+    store.saveStudent(newStudent);
     store.logEvent(userId, 'USER_REGISTERED', undefined, 'LEAD', { email, phone }, 'STUDENT', userId);
 
     res.status(201).json({
@@ -86,27 +83,17 @@ app.post('/api/v1/auth/login', (req: Request, res: Response) => {
     }
 
     const encoded = Buffer.from(password).toString('base64');
-    let foundUser: UserAccount | null = null;
+    const user = store.findUserByEmailOrPhone(emailOrPhone);
 
-    for (const u of store.users.values()) {
-      if (
-        (u.email.toLowerCase() === emailOrPhone.toLowerCase() || u.phone === emailOrPhone) &&
-        u.passwordHash === encoded
-      ) {
-        foundUser = u;
-        break;
-      }
-    }
-
-    if (!foundUser) {
+    if (!user || user.passwordHash !== encoded) {
       return res.status(401).json({ error: 'Invalid email/phone or password.' });
     }
 
-    const student = store.students.get(foundUser.id);
+    const student = store.getStudent(user.id);
 
     res.json({
       message: 'Login successful.',
-      user: { id: foundUser.id, email: foundUser.email, phone: foundUser.phone, role: foundUser.role },
+      user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
       student: student || null
     });
   } catch (err: any) {
@@ -115,7 +102,6 @@ app.post('/api/v1/auth/login', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/google
-// Handles Google OAuth 2.0 Sign In & Sign Up
 app.post('/api/v1/auth/google', (req: Request, res: Response) => {
   try {
     const { email, firstName, lastName, googleId } = req.body;
@@ -123,25 +109,16 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email is required from Google account.' });
     }
 
-    // Check if user already exists
-    let existingUser: UserAccount | null = null;
-    for (const u of store.users.values()) {
-      if (u.email.toLowerCase() === email.toLowerCase()) {
-        existingUser = u;
-        break;
-      }
-    }
-
-    if (existingUser) {
-      const student = store.students.get(existingUser.id);
+    let existing = store.findUserByEmailOrPhone(email);
+    if (existing) {
+      const student = store.getStudent(existing.id);
       return res.json({
         message: 'Google Sign In successful.',
-        user: { id: existingUser.id, email: existingUser.email, phone: existingUser.phone, role: existingUser.role },
+        user: { id: existing.id, email: existing.email, phone: existing.phone, role: existing.role },
         student: student || null
       });
     }
 
-    // Otherwise create new student from Google profile
     const userId = uuidv4();
     const newUser: UserAccount = {
       id: userId,
@@ -152,7 +129,7 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       createdAt: new Date()
     };
 
-    store.users.set(userId, newUser);
+    store.saveUser(newUser);
 
     const newStudent: Student = {
       id: userId,
@@ -160,8 +137,8 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       lastName: lastName || 'User',
       phone: newUser.phone,
       email: email.toLowerCase(),
-      nationality: 'DRC',
-      currentCountry: 'DRC',
+      nationality: 'Global',
+      currentCountry: 'Global',
       targetCountry: 'India',
       targetProgramLevel: 'UNDERGRADUATE',
       budgetCurrency: 'USD',
@@ -171,7 +148,7 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    store.students.set(userId, newStudent);
+    store.saveStudent(newStudent);
     store.logEvent(userId, 'USER_REGISTERED_GOOGLE', undefined, 'LEAD', { email }, 'STUDENT', userId);
 
     res.status(201).json({
@@ -184,21 +161,19 @@ app.post('/api/v1/auth/google', (req: Request, res: Response) => {
   }
 });
 
-
 // ==========================================
 // ADMIN / OPERATIONS PORTAL APIs
 // ==========================================
 
 // GET /api/v1/admin/applications
 app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
-  const applications: any[] = [];
-  
-  store.students.forEach(student => {
-    const assessment = store.assessments.get(student.id);
-    const documents = store.documents.get(student.id) || [];
-    const events = store.caseEvents.filter(e => e.caseId === student.id);
+  const students = store.getAllStudents();
+  const applications = students.map(student => {
+    const assessment = store.getAssessment(student.id);
+    const documents = store.getDocuments(student.id);
+    const events = store.getEvents(student.id);
 
-    applications.push({
+    return {
       student,
       readinessScore: assessment?.readinessScore ?? null,
       aiConfidence: assessment?.aiConfidence ?? null,
@@ -206,10 +181,9 @@ app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
       uploadedCount: documents.filter(d => d.state === 'UPLOADED' || d.state === 'VERIFIED').length,
       documents,
       lastEvent: events[events.length - 1] || null
-    });
+    };
   });
 
-  // Calculate metrics
   const total = applications.length;
   const awaitingReview = applications.filter(a => a.student.status === 'DOCS_REVIEW' || a.student.status === 'HUMAN_REVIEW').length;
   const approved = applications.filter(a => a.student.status === 'APPROVED').length;
@@ -224,12 +198,12 @@ app.get('/api/v1/admin/applications', (_req: Request, res: Response) => {
 // GET /api/v1/admin/applications/:id
 app.get('/api/v1/admin/applications/:id', (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const student = store.students.get(id);
+  const student = store.getStudent(id);
   if (!student) return res.status(404).json({ error: 'Application not found.' });
 
-  const assessment = store.assessments.get(id);
-  const documents = store.documents.get(id) || [];
-  const timeline = store.caseEvents.filter(e => e.caseId === id);
+  const assessment = store.getAssessment(id);
+  const documents = store.getDocuments(id);
+  const timeline = store.getEvents(id);
 
   res.json({
     student,
@@ -243,23 +217,23 @@ app.get('/api/v1/admin/applications/:id', (req: Request, res: Response) => {
 app.post('/api/v1/admin/applications/:id/decision', (req: Request, res: Response) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { action, notes, targetPartner } = req.body; // 'APPROVE' | 'REQUEST_CORRECTION' | 'ROUTE'
+    const { action, notes, targetPartner } = req.body;
 
-    const student = store.students.get(id);
+    const student = store.getStudent(id);
     if (!student) return res.status(404).json({ error: 'Student not found.' });
 
     if (action === 'APPROVE') {
       store.transitionStudent(id, 'APPROVED', 'REVIEWER', undefined, { notes });
-      return res.json({ message: 'Application approved successfully.', student: store.students.get(id) });
+      return res.json({ message: 'Application approved successfully.', student: store.getStudent(id) });
     } else if (action === 'REQUEST_CORRECTION') {
       store.transitionStudent(id, 'DOCS_PENDING', 'REVIEWER', undefined, { notes });
-      return res.json({ message: 'Correction requested from student.', student: store.students.get(id) });
+      return res.json({ message: 'Correction requested from student.', student: store.getStudent(id) });
     } else if (action === 'ROUTE') {
       if (student.status !== 'APPROVED') {
         store.transitionStudent(id, 'APPROVED', 'REVIEWER');
       }
       store.transitionStudent(id, 'ROUTED', 'REVIEWER', undefined, { partner: targetPartner || 'KIIT University' });
-      return res.json({ message: `Successfully routed to partner: ${targetPartner || 'KIIT University'}`, student: store.students.get(id) });
+      return res.json({ message: `Successfully routed to partner: ${targetPartner || 'KIIT University'}`, student: store.getStudent(id) });
     }
 
     res.status(400).json({ error: 'Invalid action.' });
@@ -277,7 +251,7 @@ app.post('/api/v1/intake/start', (req: Request, res: Response) => {
   try {
     const { studentId, targetCountry, budgetMaxAnnual } = req.body;
 
-    let student = studentId ? store.students.get(studentId) : null;
+    let student = studentId ? store.getStudent(studentId) : null;
     if (!student) {
       return res.status(400).json({ error: 'Please sign up or log in first.' });
     }
@@ -285,9 +259,10 @@ app.post('/api/v1/intake/start', (req: Request, res: Response) => {
     student.targetCountry = targetCountry || student.targetCountry;
     student.budgetMaxAnnual = budgetMaxAnnual || student.budgetMaxAnnual;
 
-    // Transition from LEAD to INTAKE
     if (student.status === 'LEAD') {
       student = store.transitionStudent(student.id, 'INTAKE', 'STUDENT', undefined, { targetCountry });
+    } else {
+      store.saveStudent(student);
     }
 
     res.json({ message: 'Intake initiated.', student });
@@ -301,7 +276,7 @@ app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
   try {
     const { studentId, languageSignals, academicSignals, intentSignals } = req.body;
 
-    const student = store.students.get(studentId);
+    const student = store.getStudent(studentId);
     if (!student) {
       return res.status(404).json({ error: `Student with ID ${studentId} not found.` });
     }
@@ -346,7 +321,7 @@ app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
       evaluatedAt: new Date()
     };
 
-    store.assessments.set(studentId, assessment);
+    store.saveAssessment(assessment);
     store.logEvent(studentId, 'ASSESSMENT_COMPLETED', 'ASSESSMENT', undefined, { readinessScore: totalScore, aiConfidence }, 'AI_AGENT');
 
     store.transitionStudent(studentId, 'DOCS_PENDING', 'SYSTEM', undefined, { readinessScore: totalScore });
@@ -365,8 +340,8 @@ app.post('/api/v1/assessments/submit', (req: Request, res: Response) => {
 // GET /api/v1/students/:id/checklist
 app.get('/api/v1/students/:id/checklist', (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const docs = store.documents.get(id);
-  if (!docs) return res.status(404).json({ error: `Checklist not found for student ${id}` });
+  const docs = store.getDocuments(id);
+  if (!docs || docs.length === 0) return res.status(404).json({ error: `Checklist not found for student ${id}` });
   res.json({ studentId: id, checklist: docs });
 });
 
@@ -375,35 +350,35 @@ app.post('/api/v1/documents/:docId/mock-upload', (req: Request, res: Response) =
   const docId = Array.isArray(req.params.docId) ? req.params.docId[0] : req.params.docId;
   const { studentId, fileUrl } = req.body;
 
-  const docs = store.documents.get(studentId);
-  if (!docs) return res.status(404).json({ error: 'Student documents not found.' });
+  const docs = store.getDocuments(studentId);
+  if (!docs || docs.length === 0) return res.status(404).json({ error: 'Student documents not found.' });
 
   const doc = docs.find(d => d.id === docId);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
-  doc.state = 'UPLOADED';
-  doc.fileUrl = fileUrl || `https://storage.fluentwave.internal/docs/${docId}.pdf`;
-  doc.uploadedAt = new Date();
+  const uploadedUrl = fileUrl || `https://storage.fluentwave.internal/docs/${docId}.pdf`;
+  store.updateDocument(docId, 'UPLOADED', uploadedUrl);
 
   store.logEvent(studentId, 'DOCUMENT_UPLOADED', 'REQUESTED', 'UPLOADED', { docType: doc.docType, docId }, 'STUDENT');
 
-  const allUploaded = docs.every(d => d.state === 'UPLOADED' || d.state === 'VERIFIED');
+  const refreshedDocs = store.getDocuments(studentId);
+  const allUploaded = refreshedDocs.every(d => d.state === 'UPLOADED' || d.state === 'VERIFIED');
   if (allUploaded) {
     store.transitionStudent(studentId, 'DOCS_REVIEW', 'SYSTEM');
   }
 
-  res.json({ message: 'Document uploaded.', document: doc });
+  res.json({ message: 'Document uploaded.', document: { ...doc, state: 'UPLOADED', fileUrl: uploadedUrl } });
 });
 
 // GET /api/v1/students/:id/dashboard
 app.get('/api/v1/students/:id/dashboard', (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const student = store.students.get(id);
+  const student = store.getStudent(id);
   if (!student) return res.status(404).json({ error: 'Student not found.' });
 
-  const events = store.caseEvents.filter(e => e.caseId === id);
-  const checklist = store.documents.get(id) || [];
-  const assessment = store.assessments.get(id);
+  const events = store.getEvents(id);
+  const checklist = store.getDocuments(id);
+  const assessment = store.getAssessment(id);
 
   let nextAction = 'Complete your intake';
   if (student.status === 'INTAKE') nextAction = 'Take the Readiness Assessment';
