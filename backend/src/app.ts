@@ -4,6 +4,18 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { dbStore as store } from './db_store';
 import { Student, Assessment, UserAccount } from './types';
+import bcrypt from 'bcrypt';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'mock_access_key',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'mock_secret_key',
+  }
+});
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || 'fluentwave-docs-mock-bucket';
 
 const app = express();
 app.use(cors());
@@ -19,7 +31,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // ==========================================
 
 // POST /api/v1/auth/signup
-app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
+app.post('/api/v1/auth/signup', async (req: Request, res: Response) => {
   try {
     const { firstName, lastName, phone, email, password } = req.body;
 
@@ -33,11 +45,14 @@ app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
     }
 
     const userId = uuidv4();
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
     const newUser: UserAccount = {
       id: userId,
       email: email.toLowerCase(),
       phone,
-      passwordHash: Buffer.from(password).toString('base64'),
+      passwordHash,
       role: 'STUDENT',
       createdAt: new Date()
     };
@@ -75,17 +90,21 @@ app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/login
-app.post('/api/v1/auth/login', (req: Request, res: Response) => {
+app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
   try {
     const { emailOrPhone, password } = req.body;
     if (!emailOrPhone || !password) {
       return res.status(400).json({ error: 'Email/Phone and password are required.' });
     }
 
-    const encoded = Buffer.from(password).toString('base64');
     const user = store.findUserByEmailOrPhone(emailOrPhone);
 
-    if (!user || user.passwordHash !== encoded) {
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email/phone or password.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
       return res.status(401).json({ error: 'Invalid email/phone or password.' });
     }
 
@@ -345,10 +364,41 @@ app.get('/api/v1/students/:id/checklist', (req: Request, res: Response) => {
   res.json({ studentId: id, checklist: docs });
 });
 
-// POST /api/v1/documents/:docId/mock-upload
-app.post('/api/v1/documents/:docId/mock-upload', (req: Request, res: Response) => {
+// GET /api/v1/documents/:docId/upload-url
+app.get('/api/v1/documents/:docId/upload-url', async (req: Request, res: Response) => {
+  try {
+    const docId = Array.isArray(req.params.docId) ? req.params.docId[0] : req.params.docId;
+    const { studentId, fileName, fileType } = req.query;
+
+    if (!studentId || !fileName || !fileType) {
+      return res.status(400).json({ error: 'Missing required query parameters' });
+    }
+
+    const docs = store.getDocuments(studentId as string);
+    const doc = docs.find(d => d.id === docId);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const fileExtension = (fileName as string).split('.').pop();
+    const fileKey = `students/${studentId}/documents/${docId}.${fileExtension}`;
+
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: fileKey,
+      ContentType: fileType as string
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    res.json({ uploadUrl, fileKey });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/documents/:docId/confirm-upload
+app.post('/api/v1/documents/:docId/confirm-upload', (req: Request, res: Response) => {
   const docId = Array.isArray(req.params.docId) ? req.params.docId[0] : req.params.docId;
-  const { studentId, fileUrl } = req.body;
+  const { studentId, fileKey } = req.body;
 
   const docs = store.getDocuments(studentId);
   if (!docs || docs.length === 0) return res.status(404).json({ error: 'Student documents not found.' });
@@ -356,8 +406,8 @@ app.post('/api/v1/documents/:docId/mock-upload', (req: Request, res: Response) =
   const doc = docs.find(d => d.id === docId);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
-  const uploadedUrl = fileUrl || `https://storage.fluentwave.internal/docs/${docId}.pdf`;
-  store.updateDocument(docId, 'UPLOADED', uploadedUrl);
+  const fileUrl = `https://${S3_BUCKET_NAME}.s3.amazonaws.com/${fileKey}`;
+  store.updateDocument(docId, 'UPLOADED', fileUrl);
 
   store.logEvent(studentId, 'DOCUMENT_UPLOADED', 'REQUESTED', 'UPLOADED', { docType: doc.docType, docId }, 'STUDENT');
 
@@ -367,7 +417,7 @@ app.post('/api/v1/documents/:docId/mock-upload', (req: Request, res: Response) =
     store.transitionStudent(studentId, 'DOCS_REVIEW', 'SYSTEM');
   }
 
-  res.json({ message: 'Document uploaded.', document: { ...doc, state: 'UPLOADED', fileUrl: uploadedUrl } });
+  res.json({ message: 'Document confirmed uploaded.', document: { ...doc, state: 'UPLOADED', fileUrl } });
 });
 
 // GET /api/v1/students/:id/dashboard
