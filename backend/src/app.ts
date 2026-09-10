@@ -22,9 +22,39 @@ app.use(cors());
 app.use(express.json());
 
 // 1. Health check
-app.get('/health', async (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'fluentwave-backend', database: 'persistent-sqlite', timestamp: new Date() });
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'fluentwave-backend', database: 'persistent-postgresql', timestamp: new Date() });
 });
+
+// Seed Admin Account (run on startup)
+(async () => {
+  try {
+    const adminEmail = 'Dueng';
+    const adminPassword = 'Dueng@123';
+    
+    // Create users table if it exists and check for admin
+    const existingAdmin = await store.findUserByEmailOrPhone(adminEmail).catch(() => null);
+    
+    if (!existingAdmin) {
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(adminPassword, salt);
+      
+      const adminUser: UserAccount = {
+        id: uuidv4(),
+        email: adminEmail,
+        phone: '0000000000',
+        passwordHash,
+        role: 'ADMIN',
+        createdAt: new Date()
+      };
+      
+      await store.saveUser(adminUser);
+      console.log('✅ Default Admin account created successfully.');
+    }
+  } catch (err) {
+    console.error('Failed to seed admin account:', err);
+  }
+})();
 
 // ==========================================
 // AUTHENTICATION APIs (Student Accounts)
